@@ -1,5 +1,6 @@
 const Transaction = require('../models/transactionModel');
 const User = require('../models/userModel');
+const connectDB = require('../config/mongo-config');
 
 // Tạo giao dịch mới (thu nhập hoặc chi phí)
 const createTransaction = async (req, res) => {
@@ -59,7 +60,34 @@ const getTransactionsByUserId = async (req, res) => {
   }
 };
 
+// Xóa giao dịch transaction theo userId
+const deleteTransaction = async (req, res) => {
+  try {
+      const { userId, transactionId } = req.params;
+      // Kiểm tra xem user có tồn tại không
+      const user = await User.findById(userId);
+      if (!user) {
+          return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Kiểm tra giao dịch có tồn tại và thuộc về user không
+      const transaction = await Transaction.findOne({ _id: transactionId, userId });
+      if (!transaction) {
+          return res.status(404).json({ message: 'Transaction not found or does not belong to this user' });
+      }
+
+      // Xóa giao dịch
+      await Transaction.findByIdAndDelete(transactionId);
+
+      return res.status(200).json({ message: 'Transaction deleted successfully' });
+  } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   createTransaction,
   getTransactionsByUserId,
+  deleteTransaction
 };

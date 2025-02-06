@@ -29,7 +29,5 @@ const transactionSchema = new mongoose.Schema({
   },
 });
 
-// Tạo mô hình cho giao dịch
 const Transaction = mongoose.model('Transaction', transactionSchema);
-
 module.exports = Transaction;
