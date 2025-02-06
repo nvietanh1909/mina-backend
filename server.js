@@ -5,6 +5,7 @@ const connectDB = require('./config/mongo-config');
 // Import routes
 const userRoutes = require('./routes/userRoutes');
 const transactionRoutes = require('./routes/transactionRoutes');
+const walletRoutes = require('./routes/walletRoutes');
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ connectDB();
 // Use user routes for handling user-related requests
 app.use('/users', userRoutes);
 app.use('/transactions', transactionRoutes);
+app.use('/wallets', walletRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);

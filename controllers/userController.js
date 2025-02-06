@@ -3,8 +3,21 @@ const User = require('../models/userModel');
 const connectDB = require('../config/mongo-config');
 const jwt = require('jsonwebtoken');
 
+
+// Lấy ra tất cả user
+const getAllUsers = async (req, res) => {
+  try {
+    await connectDB();
+    const users = await User.find();
+    res.status(200).json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Error fetching users' });
+  }
+};
+
 // Thêm user
-const createUser = async (req, res) => {
+const signUpUser = async (req, res) => {
   const { email, password, name } = req.body;
 
   if (!email || !password || !name) {
@@ -29,17 +42,6 @@ const createUser = async (req, res) => {
   }
 };
 
-// Lấy ra tất cả user
-const getAllUsers = async (req, res) => {
-  try {
-    await connectDB();
-    const users = await User.find();
-    res.status(200).json(users);
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    res.status(500).json({ message: 'Error fetching users' });
-  }
-};
 
 // Login 
 const loginUser = async (req, res) => {
@@ -77,7 +79,7 @@ const loginUser = async (req, res) => {
 };
 
 module.exports = {
-  createUser,
+  signUpUser,
   getAllUsers,
   loginUser,
 };
