@@ -84,6 +84,7 @@ const deleteWallet = async (req, res) => {
     }
 };
 
+
 module.exports = {
     getAllWallets,
     getWalletsByUserId,
