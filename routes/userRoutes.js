@@ -1,20 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { signUpUser, getAllUsers, loginUser, getUserById, authenticateToken, getUserMe } = require('../controllers/userController');
+const userController = require('../controllers/userController');
+const auth = require('../middleware/auth');
 
-// Route to create a new user
-router.post('/signup', signUpUser);
+// Route công khai
+router.post('/signup', userController.register);
+router.post('/login', userController.login);
 
-// Route to get all users
-router.get('/', getAllUsers);
-
-// Route to login user
-router.post('/login', loginUser);
-
-// Route to get user by id
-router.get('/:id', getUserById);
-
-// Route to get user by id
-router.get('/me', authenticateToken, getUserMe);
+// Route yêu cầu xác thực
+router.use(auth);
+router.get('/profile', userController.getProfile);
+router.patch('/profile', userController.updateProfile);
 
 module.exports = router;

@@ -6,6 +6,11 @@ const WalletSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
+    Name: {
+        type: String,
+        required: true,
+        default: "Default"
+    },
     balance: {
         type: Number,
         required: true,

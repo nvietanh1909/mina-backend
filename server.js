@@ -19,9 +19,9 @@ app.use(express.json());
 connectDB();
 
 // Use user routes for handling user-related requests
-app.use('/users', userRoutes);
-app.use('/transactions', transactionRoutes);
-app.use('/wallets', walletRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/transactions', transactionRoutes);
+app.use('/api/wallets', walletRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
