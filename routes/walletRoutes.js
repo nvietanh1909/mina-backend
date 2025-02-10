@@ -1,17 +1,23 @@
 const express = require('express');
-const { getAllWallets, getWalletsByUserId, createWallet, deleteWallet } = require('../controllers/walletController');
 const router = express.Router();
+const walletController = require('../controllers/walletController')
+const auth = require('../middleware/auth');
 
-// Lấy tất cả ví
-router.get('/', getAllWallets);
+// Tất cả các routes đều yêu cầu xác thực
+router.use(auth);
 
-// Lấy tất cả ví theo userId
-router.get('/:userId', getWalletsByUserId);
+// Tạo và lấy danh sách ví
+router.route('/')
+  .post(walletController.createWallet)
+  .get(walletController.getAllWallets);
 
-// Tạo ví mới
-router.post('/create', createWallet);
+// Các operations với một ví cụ thể
+router.route('/:id')
+  .get(walletController.getWallet)
+  .patch(walletController.updateWallet)
+  .delete(walletController.deleteWallet);
 
-// Xóa ví theo walletId
-router.delete('/delete/:userId/:walletId', deleteWallet);
+// Lấy số dư và thống kê của ví
+router.get('/:id/balance', walletController.getWalletBalance);
 
 module.exports = router;

@@ -1,93 +1,234 @@
 const Wallet = require('../models/walletModel'); 
 const User = require('../models/userModel'); 
-const connectDB = require('../config/mongo-config');
-
-// Lấy ra tất cả wallet
-const getAllWallets = async (req, res) => {
+const Transaction = require('../models/transactionModel')
+exports.createWallet = async (req, res) => {
     try {
-      await connectDB();
-      const wallet = await Wallet.find();
-      res.status(200).json(wallet);
+      const { name, description, currency } = req.body;
+      
+      const defaultWallet = await Wallet.findOne({ 
+        userId: req.user.id,
+        isDefault: true 
+      });
+  
+      const wallet = await Wallet.create({
+        userId: req.user.id,
+        name,
+        description,
+        currency,
+        isDefault: !defaultWallet
+      });
+  
+      res.status(201).json({
+        status: 'success',
+        data: {
+          wallet
+        }
+      });
     } catch (error) {
-      console.error('Error fetching wallets:', error);
-      res.status(500).json({ message: 'Error fetching wallets' });
+      res.status(400).json({
+        status: 'error',
+        message: error.message
+      });
     }
   };
-
-// Lấy tất cả ví theo userId
-const getWalletsByUserId = async (req, res) => {
+  
+  exports.getAllWallets = async (req, res) => {
     try {
-        const { userId } = req.params;
-
-        // Kiểm tra user có tồn tại không
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({ message: "User không tồn tại!" });
+      const wallets = await Wallet.find({ userId: req.user.id });
+  
+      res.status(200).json({
+        status: 'success',
+        data: {
+          wallets
         }
-
-        // Lấy danh sách ví của user
-        const wallets = await Wallet.find({ userId });
-
-        if (!wallets || wallets.length === 0) {
-            return res.status(404).json({ message: "Không tìm thấy ví nào!" });
-        }
-
-        res.status(200).json(wallets);
+      });
     } catch (error) {
-        res.status(500).json({ message: "Lỗi server", error });
+      res.status(400).json({
+        status: 'error',
+        message: error.message
+      });
     }
-};
-
-// Thêm ví mới
-const createWallet = async (req, res) => {
+  };
+  
+  exports.getWallet = async (req, res) => {
     try {
-        const { userId, balance} = req.body;
-
-        // Kiểm tra user có tồn tại không
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({ message: "User không tồn tại!" });
+      const wallet = await Wallet.findOne({
+        _id: req.params.id,
+        userId: req.user.id
+      });
+  
+      if (!wallet) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Không tìm thấy ví'
+        });
+      }
+  
+      res.status(200).json({
+        status: 'success',
+        data: {
+          wallet
         }
-
-        // Kiểm tra xem userId đã có ví chưa
-        const existingWallet = await Wallet.findOne({ userId });
-        if (existingWallet) {
-            const wallet = new Wallet({ userId, balance:  0, active: true });
-            await wallet.save();
-        }
-
-        // Tạo ví mới
-        const wallet = new Wallet({ userId, balance, active: false });
-        await wallet.save();
-
-        res.status(201).json({ message: "Tạo ví thành công!", wallet });
+      });
     } catch (error) {
-        res.status(500).json({ message: "Lỗi server", error });
+      res.status(400).json({
+        status: 'error',
+        message: error.message
+      });
     }
-};
-
-// Xóa ví theo ID
-const deleteWallet = async (req, res) => {
+  };
+  
+  exports.updateWallet = async (req, res) => {
     try {
-        const { walletId } = req.params;
-
-        // Kiểm tra xem ví có tồn tại không
-        const wallet = await Wallet.findById(walletId);
-        if (!wallet) {
-            return res.status(404).json({ message: "Không tìm thấy ví!" });
+      const { name, description, isDefault } = req.body;
+  
+      const wallet = await Wallet.findOne({
+        _id: req.params.id,
+        userId: req.user.id
+      });
+  
+      if (!wallet) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Không tìm thấy ví'
+        });
+      }
+  
+      if (name) wallet.name = name;
+      if (description) wallet.description = description;
+      if (typeof isDefault === 'boolean') wallet.isDefault = isDefault;
+  
+      await wallet.save();
+  
+      res.status(200).json({
+        status: 'success',
+        data: {
+          wallet
         }
-
-        await Wallet.findByIdAndDelete(walletId);
-        res.status(200).json({ message: "Xóa ví thành công!" });
+      });
     } catch (error) {
-        res.status(500).json({ message: "Lỗi server", error });
+      res.status(400).json({
+        status: 'error',
+        message: error.message
+      });
     }
-};
-
-
-module.exports = {
-    getAllWallets,
-    getWalletsByUserId,
-    createWallet,
-    deleteWallet,
-};
+  };
+  
+  exports.deleteWallet = async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+  
+    try {
+      const wallet = await Wallet.findOne({
+        _id: req.params.id,
+        userId: req.user.id
+      }).session(session);
+  
+      if (!wallet) {
+        await session.abortTransaction();
+        return res.status(404).json({
+          status: 'error',
+          message: 'Không tìm thấy ví'
+        });
+      }
+  
+      if (wallet.isDefault) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          status: 'error',
+          message: 'Không thể xóa ví mặc định'
+        });
+      }
+  
+      // Kiểm tra xem ví có giao dịch không
+      const hasTransactions = await Transaction.exists({
+        walletId: wallet._id
+      }).session(session);
+  
+      if (hasTransactions) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          status: 'error',
+          message: 'Không thể xóa ví đã có giao dịch'
+        });
+      }
+  
+      await wallet.deleteOne({ session });
+      await session.commitTransaction();
+  
+      res.status(200).json({
+        status: 'success',
+        message: 'Xóa ví thành công'
+      });
+    } catch (error) {
+      await session.abortTransaction();
+      res.status(400).json({
+        status: 'error',
+        message: error.message
+      });
+    } finally {
+      session.endSession();
+    }
+  };
+  
+  exports.getWalletBalance = async (req, res) => {
+    try {
+      const wallet = await Wallet.findOne({
+        _id: req.params.id,
+        userId: req.user.id
+      });
+  
+      if (!wallet) {
+        return res.status(404).json({
+          status: 'error',
+          message: 'Không tìm thấy ví'
+        });
+      }
+  
+      // Lấy tổng thu
+      const totalIncome = await Transaction.aggregate([
+        {
+          $match: {
+            walletId: wallet._id,
+            type: 'income'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' }
+          }
+        }
+      ]);
+  
+      // Lấy tổng chi
+      const totalExpense = await Transaction.aggregate([
+        {
+          $match: {
+            walletId: wallet._id,
+            type: 'expense'
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' }
+          }
+        }
+      ]);
+  
+      res.status(200).json({
+        status: 'success',
+        data: {
+          balance: wallet.balance,
+          totalIncome: totalIncome[0]?.total || 0,
+          totalExpense: totalExpense[0]?.total || 0
+        }
+      });
+    } catch (error) {
+      res.status(400).json({
+        status: 'error',
+        message: error.message
+      });
+    }
+  };
