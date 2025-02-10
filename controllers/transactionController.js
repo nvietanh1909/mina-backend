@@ -5,14 +5,11 @@ const mongoose = require('mongoose');
 exports.createTransaction = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
-
   try {
-    const { walletId, amount, type, category, date, notes } = req.body;
+    const { amount, notes, category, type, date } = req.body;
 
-    // Kiểm tra ví có tồn tại và thuộc về user không
-    const wallet = await Wallet.findOne({
-      _id: walletId,
-      userId: req.user.id
+    const wallet = await Wallet.findOne({ 
+      userId: req.user.id 
     }).session(session);
 
     if (!wallet) {
@@ -32,20 +29,21 @@ exports.createTransaction = async (req, res) => {
       });
     }
 
+    // Tạo giao dịch
     const transaction = await Transaction.create([{
       userId: req.user.id,
-      walletId,
+      walletId: wallet._id,
       amount,
-      type,
+      notes: notes || '',
       category,
-      date: date || new Date(),
-      notes
+      type,
+      date: date || new Date()
     }], { session });
 
     // Cập nhật số dư ví
     const updateAmount = type === 'income' ? amount : -amount;
     await Wallet.findByIdAndUpdate(
-      walletId,
+      wallet._id,
       { $inc: { balance: updateAmount } },
       { session }
     );
@@ -72,7 +70,6 @@ exports.createTransaction = async (req, res) => {
 exports.getTransactions = async (req, res) => {
   try {
     const {
-      walletId,
       type,
       category,
       startDate,
@@ -84,9 +81,10 @@ exports.getTransactions = async (req, res) => {
 
     const query = { userId: req.user.id };
 
-    if (walletId) query.walletId = walletId;
     if (type) query.type = type;
     if (category) query.category = category;
+    
+    // Xử lý lọc theo ngày
     if (startDate || endDate) {
       query.date = {};
       if (startDate) query.date.$gte = new Date(startDate);
@@ -98,9 +96,7 @@ exports.getTransactions = async (req, res) => {
     const transactions = await Transaction.find(query)
       .sort(sort)
       .skip(skip)
-      .limit(limit)
-      .populate('category', 'name icon')
-      .populate('walletId', 'name');
+      .limit(Number(limit));
 
     const total = await Transaction.countDocuments(query);
 
@@ -110,7 +106,7 @@ exports.getTransactions = async (req, res) => {
         transactions,
         pagination: {
           total,
-          page: parseInt(page),
+          page: Number(page),
           pages: Math.ceil(total / limit)
         }
       }
@@ -128,9 +124,7 @@ exports.getTransaction = async (req, res) => {
     const transaction = await Transaction.findOne({
       _id: req.params.id,
       userId: req.user.id
-    })
-    .populate('category', 'name icon')
-    .populate('walletId', 'name');
+    });
 
     if (!transaction) {
       return res.status(404).json({
@@ -154,62 +148,33 @@ exports.getTransaction = async (req, res) => {
 };
 
 exports.updateTransaction = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
-    // Lấy giao dịch cũ
-    const oldTransaction = await Transaction.findOne({
-      _id: req.params.id,
-      userId: req.user.id
-    }).session(session);
+    const { amount, notes, category, type, date } = req.body;
 
-    if (!oldTransaction) {
-      await session.abortTransaction();
+    const updatedTransaction = await Transaction.findOneAndUpdate(
+      { 
+        _id: req.params.id, 
+        userId: req.user.id 
+      },
+      { 
+        amount, 
+        notes, 
+        category, 
+        type, 
+        date: date || new Date() 
+      },
+      { 
+        new: true, 
+        runValidators: true 
+      }
+    );
+
+    if (!updatedTransaction) {
       return res.status(404).json({
         status: 'error',
         message: 'Không tìm thấy giao dịch'
       });
     }
-
-    const { amount, type, walletId } = req.body;
-
-    // Nếu thay đổi ví hoặc số tiền, cần cập nhật số dư các ví
-    if (amount !== oldTransaction.amount || 
-        type !== oldTransaction.type || 
-        walletId !== oldTransaction.walletId.toString()) {
-      
-      // Hoàn lại số dư ví cũ
-      const oldWallet = await Wallet.findById(oldTransaction.walletId).session(session);
-      const oldAmount = oldTransaction.type === 'income' ? -oldTransaction.amount : oldTransaction.amount;
-      oldWallet.balance += oldAmount;
-      await oldWallet.save({ session });
-
-      // Cập nhật số dư ví mới
-      const newWallet = await Wallet.findById(walletId || oldTransaction.walletId).session(session);
-      const newAmount = (type || oldTransaction.type) === 'income' ? amount || oldTransaction.amount : -(amount || oldTransaction.amount);
-      
-      if (type === 'expense' && newWallet.balance + newAmount < 0) {
-        await session.abortTransaction();
-        return res.status(400).json({
-          status: 'error',
-          message: 'Số dư trong ví không đủ'
-        });
-      }
-
-      newWallet.balance += newAmount;
-      await newWallet.save({ session });
-    }
-
-    // Cập nhật giao dịch
-    const updatedTransaction = await Transaction.findByIdAndUpdate(
-      req.params.id,
-      { ...req.body },
-      { new: true, runValidators: true, session }
-    ).populate('category', 'name icon')
-     .populate('walletId', 'name');
-
-    await session.commitTransaction();
 
     res.status(200).json({
       status: 'success',
@@ -218,64 +183,48 @@ exports.updateTransaction = async (req, res) => {
       }
     });
   } catch (error) {
-    await session.abortTransaction();
     res.status(400).json({
       status: 'error',
       message: error.message
     });
-  } finally {
-    session.endSession();
   }
 };
 
 exports.deleteTransaction = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
-    const transaction = await Transaction.findOne({
+    const transaction = await Transaction.findOneAndDelete({
       _id: req.params.id,
       userId: req.user.id
-    }).session(session);
+    });
 
     if (!transaction) {
-      await session.abortTransaction();
       return res.status(404).json({
         status: 'error',
         message: 'Không tìm thấy giao dịch'
       });
     }
 
-    // Cập nhật số dư ví
-    const wallet = await Wallet.findById(transaction.walletId).session(session);
-    const amount = transaction.type === 'income' ? -transaction.amount : transaction.amount;
-    wallet.balance += amount;
-    await wallet.save({ session });
-
-    await transaction.deleteOne({ session });
-    await session.commitTransaction();
-
     res.status(200).json({
       status: 'success',
       message: 'Xóa giao dịch thành công'
     });
   } catch (error) {
-    await session.abortTransaction();
     res.status(400).json({
       status: 'error',
       message: error.message
     });
-  } finally {
-    session.endSession();
   }
 };
 
 exports.getTransactionStats = async (req, res) => {
   try {
-    const { walletId, startDate, endDate } = req.query;
+    const { type, category, startDate, endDate } = req.query;
 
     const query = { userId: req.user.id };
-    if (walletId) query.walletId = walletId;
+
+    if (type) query.type = type;
+    if (category) query.category = category;
+    
     if (startDate || endDate) {
       query.date = {};
       if (startDate) query.date.$gte = new Date(startDate);
@@ -312,14 +261,6 @@ exports.getTransactionStats = async (req, res) => {
           },
           total: { $sum: '$amount' },
           count: { $sum: 1 }
-        }
-      },
-      {
-        $lookup: {
-          from: 'categories',
-          localField: '_id.category',
-          foreignField: '_id',
-          as: 'category'
         }
       }
     ]);

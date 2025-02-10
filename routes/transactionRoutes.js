@@ -3,20 +3,25 @@ const router = express.Router();
 const transactionController = require('../controllers/transactionController');
 const auth = require('../middleware/auth');
 
-// Tất cả các routes đều yêu cầu xác thực
+// Sử dụng middleware xác thực cho tất cả các route
 router.use(auth);
 
-// Lấy thống kê giao dịch
+// Tạo giao dịch mới
+router.post('/', transactionController.createTransaction);
+
+// Lấy danh sách giao dịch
+router.get('/', transactionController.getTransactions);
+
+// Lấy chi tiết một giao dịch
+router.get('/:id', transactionController.getTransaction);
+
+// Cập nhật giao dịch
+router.patch('/:id', transactionController.updateTransaction);
+
+// Xóa giao dịch
+router.delete('/:id', transactionController.deleteTransaction);
+
+// Thống kê giao dịch
 router.get('/stats', transactionController.getTransactionStats);
-
-// CRUD operations
-router.route('/')
-  .post(transactionController.createTransaction)
-  .get(transactionController.getTransactions);
-
-router.route('/:id')
-  .get(transactionController.getTransaction)
-  .patch(transactionController.updateTransaction)
-  .delete(transactionController.deleteTransaction);
 
 module.exports = router;
