@@ -1,14 +1,22 @@
 const express = require('express');
-const { createTransaction, getTransactionsByUserId, deleteTransaction } = require('../controllers/transactionController');
 const router = express.Router();
+const transactionController = require('../controllers/transactionController');
+const auth = require('../middleware/auth');
 
-// Route tạo giao dịch
-router.post('/create', createTransaction);
+// Tất cả các routes đều yêu cầu xác thực
+router.use(auth);
 
-// Route lấy danh sách giao dịch của người dùng theo userId
-router.get('/:userId', getTransactionsByUserId);
+// Lấy thống kê giao dịch
+router.get('/stats', transactionController.getTransactionStats);
 
-// Route xóa transaction
-router.delete('/delete/:userId/:transactionId', deleteTransaction);
+// CRUD operations
+router.route('/')
+  .post(transactionController.createTransaction)
+  .get(transactionController.getTransactions);
+
+router.route('/:id')
+  .get(transactionController.getTransaction)
+  .patch(transactionController.updateTransaction)
+  .delete(transactionController.deleteTransaction);
 
 module.exports = router;
